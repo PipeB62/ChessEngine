@@ -72,7 +72,8 @@ function Base.show(io::IO, game_state::GameState) #Display game state
         end
     end
     print_matrix_no_quotes(string_board)
-    print("Turn: ",game_state.turn)
+    println("Turn: ",game_state.turn)
+    println("Check: ",game_state.check)
 end 
 
 function get_king_id(color::PieceColor)
