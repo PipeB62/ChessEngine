@@ -92,7 +92,7 @@ function is_king_exposed(newboard, moved_piece_id, captured_id, game_state::Game
     #check if a move exposes the king without need of recalculating the whole vision graph again
 
     piece = game_state.pieces[moved_piece_id]
-    seen_by = is_seen_by(moved_piece_id, game_state.vision_graph) #Other pieces that see the piece
+    seen_by = is_seen_by(moved_piece_id, game_state.vision_graph) #Pieces that see the piece
 
     king_id = get_king_id(piece.color)
 
@@ -121,6 +121,83 @@ function is_king_exposed(newboard, moved_piece_id, captured_id, game_state::Game
     return exposesking
 end
 
+function update_vision_graph!(vision_graph, move::SimpleMove, newboard, pieces)
+
+    from_square_node_id = LinearIndices((8,8))[move.from] + 32 #Square nodes go from 33 to 96
+    to_square_node_id = LinearIndices((8,8))[move.to] + 32 
+
+    #Remove arrow from_square->piece, and all arrows piece -> squares
+    rem_edge!(vision_graph, from_square_node_id, move.piece_id) 
+    outneighs = [i for i in outneighbors(vision_graph, move.piece_id)] 
+    for square_id in outneighs
+        rem_edge!(vision_graph, move.piece_id, square_id)
+    end
+
+    if length(outneighbors(vision_graph,move.piece_id))>0
+        print("Edges not removed properly, 1")
+    end
+
+    #If capture, remove arrow to_square -> captured_piece, and all arrows captured_piece -> squares
+    if move.captured_piece_id>0
+
+        rem_edge!(vision_graph, to_square_node_id, move.captured_piece_id)
+
+        outneighs = [i for i in outneighbors(vision_graph, move.captured_piece_id)] 
+        for i in outneighs
+            rem_edge!(vision_graph, move.captured_piece_id, i)
+        end
+
+        if length(outneighbors(vision_graph,move.piece_id))>0
+            print("Edges not removed properly, 2")
+        end
+    end
+
+    #Add arrow to_square -> piece 
+    add_edge!(vision_graph, to_square_node_id, move.piece_id)
+
+    #Update vision of moved piece 
+    new_vision = calculate_vision(move.piece_id, newboard, pieces)
+    new_vision_node_ids = LinearIndices((8,8))[new_vision] .+ 32
+    for square_id in new_vision_node_ids
+        add_edge!(vision_graph, move.piece_id, square_id)
+    end
+
+    #Update vision of long range pieces that saw the moved piece (discovery) and pieces that see the to_square (blocks)
+    long_range_pieces = [queen, bishop, rook]
+    update_ids1 = inneighbors(vision_graph, from_square_node_id) 
+    update_ids2 = inneighbors(vision_graph, to_square_node_id) 
+    update_ids = union(update_ids1, update_ids2) #Join without repetition 
+    filter!(x->x!=move.piece_id, update_ids) #Remove moved piece from list
+
+    for update_piece_id in update_ids
+        
+        update_piece = pieces[update_piece_id]
+
+        if update_piece.type in long_range_pieces #Only need to update long range pieces
+            
+            #Remove current edges
+            outneighs = [i for i in outneighbors(vision_graph, update_piece_id)] 
+            for square_id in outneighs
+                rem_edge!(vision_graph, update_piece_id, square_id)
+            end
+
+            if length(outneighbors(vision_graph, update_piece_id))>0
+                print("Edges not removed properly, 3")
+            end
+            
+            new_vision = calculate_vision(update_piece_id, newboard, pieces)
+            new_vision_node_ids = LinearIndices((8,8))[new_vision] .+ 32
+            for square_id in new_vision_node_ids
+                add_edge!(vision_graph, update_piece_id, square_id) 
+            end
+
+        end
+    end
+
+    return vision_graph
+
+end 
+
 function make_move!(game_state::GameState, move::SimpleMove)
 
     opposite_color = get_opposite_color(game_state.turn)
@@ -130,7 +207,7 @@ function make_move!(game_state::GameState, move::SimpleMove)
     game_state.board[move.to] = move.piece_id
 
     #Update vision_graph from updated board (pieces dont change)
-    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) #How to avoid doing it from scratch every time?
+    update_vision_graph!(game_state.vision_graph, move, game_state.board, game_state.pieces) 
 
     #Update turn 
     game_state.turn = opposite_color
@@ -176,7 +253,7 @@ function make_move!(game_state::GameState, move::Castle)
     game_state.board[rook_to_row, rank] = move.rook_id
 
     #Update vision_graph from updated board (pieces dont change)
-    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) 
+    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) #Vision graph from scratch
 
     #Update turn 
     game_state.turn = opposite_color
@@ -205,7 +282,7 @@ function make_move!(game_state::GameState, move::Promotion)
     game_state.pieces[move.piece_id] = Piece(move.piece.color, move.promotes_to)
 
     #Update vision_graph from updated board 
-    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) 
+    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) #Vision graph from scratch
 
     #Update turn 
     game_state.turn = opposite_color
@@ -238,7 +315,7 @@ function make_move!(game_state::GameState, move::EnPassant)
     game_state.board[move.to-direction] = 0 #capture pawn
 
     #Update vision_graph from updated board (pieces dont change)
-    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) 
+    game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) #Vision graph from scratch
 
     #Update turn 
     game_state.turn = opposite_color
