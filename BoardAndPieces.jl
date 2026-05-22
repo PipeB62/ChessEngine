@@ -18,7 +18,7 @@ end
 
 mutable struct GameState
     board::Matrix{Int8}
-    pieces::Vector{Union{Missing,Piece}}
+    pieces::Vector{Piece}
     vision_graph::SimpleDiGraph
     turn::PieceColor
     check::Bool

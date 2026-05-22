@@ -1,4 +1,4 @@
-include("Moves.jl")
+include("Evaluation.jl")
 using Random
 
 function show_moves(moves)
@@ -62,10 +62,7 @@ function cvc()
             break
         end
         
-        #show_moves(allmoves)
-        moveindex = rand(1:length(allmoves))  
-
-        move = allmoves[moveindex]
+        move = negamax(game_state, 4)
         readline()
         println("\033c")
         println(game_state.turn, " move: ", move)
@@ -82,5 +79,6 @@ end
 
 function main()
     cvc()
+    #pvc()
 end
 main()

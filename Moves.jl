@@ -7,6 +7,7 @@ struct SimpleMove <: AbstractMove
     from::CartesianIndex
     to::CartesianIndex
     captured_piece_id::Int #0 for no capture
+    newboard::Matrix{Int}
 end
 
 function Base.show(io::IO, move::SimpleMove)
@@ -25,6 +26,7 @@ struct Castle <: AbstractMove
     rook_id::Int
     color::PieceColor
     side::CastleSide
+    newboard::Matrix{Int}
 end
 
 function Base.show(io::IO, move::Castle)
@@ -38,6 +40,7 @@ struct Promotion <: AbstractMove
     to::CartesianIndex
     captured_piece_id::Int #0 for no capture
     promotes_to::PieceType
+    newboard::Matrix{Int}
 end
 
 function Base.show(io::IO, move::Promotion)
@@ -56,6 +59,7 @@ struct EnPassant <: AbstractMove
     from::CartesianIndex
     to::CartesianIndex
     captured_piece_id::Int #0 for no capture
+    newboard::Matrix{Int}
 end
 
 function Base.show(io::IO, move::EnPassant)
@@ -203,8 +207,9 @@ function make_move!(game_state::GameState, move::SimpleMove)
     opposite_color = get_opposite_color(game_state.turn)
 
     #Update board
-    game_state.board[move.from] = 0
-    game_state.board[move.to] = move.piece_id
+    #game_state.board[move.from] = 0
+    #game_state.board[move.to] = move.piece_id
+    game_state.board .= move.newboard
 
     #Update vision_graph from updated board (pieces dont change)
     update_vision_graph!(game_state.vision_graph, move, game_state.board, game_state.pieces) 
@@ -247,10 +252,11 @@ function make_move!(game_state::GameState, move::Castle)
     opposite_color = get_opposite_color(game_state.turn)
 
     #Update board
-    game_state.board[king_from_row, rank] = 0
-    game_state.board[king_to_row, rank] = move.king_id
-    game_state.board[rook_from_row, rank] = 0
-    game_state.board[rook_to_row, rank] = move.rook_id
+    #game_state.board[king_from_row, rank] = 0
+    #game_state.board[king_to_row, rank] = move.king_id
+    #game_state.board[rook_from_row, rank] = 0
+    #game_state.board[rook_to_row, rank] = move.rook_id
+    game_state.board .= move.newboard
 
     #Update vision_graph from updated board (pieces dont change)
     game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) #Vision graph from scratch
@@ -275,8 +281,9 @@ function make_move!(game_state::GameState, move::Promotion)
     opposite_color = get_opposite_color(game_state.turn)
 
     #Update board
-    game_state.board[move.from] = 0
-    game_state.board[move.to] = move.piece_id
+    #game_state.board[move.from] = 0
+    #game_state.board[move.to] = move.piece_id
+    game_state.board .= move.newboard
 
     #Update pieces
     game_state.pieces[move.piece_id] = Piece(move.piece.color, move.promotes_to)
@@ -301,18 +308,19 @@ end
 
 function make_move!(game_state::GameState, move::EnPassant)
 
-    if move.piece.color==white
-        direction = UP
-    else
-        direction = DOWN
-    end
+    #if move.piece.color==white
+    #    direction = UP
+    #else
+    #    direction = DOWN
+    #end
 
     opposite_color = get_opposite_color(game_state.turn)
 
     #Update board
-    game_state.board[move.from] = 0
-    game_state.board[move.to] = move.piece_id
-    game_state.board[move.to-direction] = 0 #capture pawn
+    #game_state.board[move.from] = 0
+    #game_state.board[move.to] = move.piece_id
+    #game_state.board[move.to-direction] = 0 #capture pawn
+    game_state.board .= move.newboard
 
     #Update vision_graph from updated board (pieces dont change)
     game_state.vision_graph = create_vision_graph(game_state.board, game_state.pieces) #Vision graph from scratch
@@ -377,11 +385,11 @@ function available_moves_pawn(piece_id, game_state::GameState)
         if !exposedking && !incheck
             if current_position[2] == promotion_rank #If the pawn is on the promotion rank, consider all possible promotions
                 for promotes_to in promotions
-                    move = Promotion(piece_id, piece, current_position, infront, 0, promotes_to)
+                    move = Promotion(piece_id, piece, current_position, infront, 0, promotes_to, newboard)
                     push!(moves, move)
                 end
             else
-                move = SimpleMove(piece_id, piece, current_position, infront, 0)
+                move = SimpleMove(piece_id, piece, current_position, infront, 0, newboard)
                 push!(moves, move)
             end
         end 
@@ -405,7 +413,7 @@ function available_moves_pawn(piece_id, game_state::GameState)
         end
 
         if !exposedking && !incheck
-            move = SimpleMove(piece_id, piece, current_position, infront2, 0)
+            move = SimpleMove(piece_id, piece, current_position, infront2, 0, newboard)
             push!(moves, move)
         end 
 
@@ -434,11 +442,11 @@ function available_moves_pawn(piece_id, game_state::GameState)
             if !exposedking && !incheck
                 if current_position[2] == promotion_rank #If the pawn is on the promotion rank, consider all possible promotions
                     for promotes_to in promotions
-                        move = Promotion(piece_id, piece, current_position, square, captured_id, promotes_to)
+                        move = Promotion(piece_id, piece, current_position, square, captured_id, promotes_to, newboard)
                         push!(moves, move)
                     end
                 else
-                    move = SimpleMove(piece_id, piece, current_position, square, captured_id)
+                    move = SimpleMove(piece_id, piece, current_position, square, captured_id, newboard)
                     push!(moves, move)
                 end
             end
@@ -450,7 +458,13 @@ function available_moves_pawn(piece_id, game_state::GameState)
         last_move_vector = game_state.last_move.from - game_state.last_move.to
         if game_state.last_move.piece.type == pawn && abs(last_move_vector[2])==2
 
-            sides = [RIGHT, LEFT]
+            if current_position[1]==1
+                sides = [RIGHT]
+            elseif current_position[1]==8
+                sides = [LEFT]
+            else
+                sides = [RIGHT,LEFT]
+            end
             for side in sides
                 side_id = game_state.board[current_position+side]
                 if side_id == game_state.last_move.piece_id #en passant possible
@@ -471,7 +485,7 @@ function available_moves_pawn(piece_id, game_state::GameState)
                     end
 
                     if !exposedking && !incheck
-                        move = EnPassant(piece_id, piece, current_position, infront+side, captured_id)
+                        move = EnPassant(piece_id, piece, current_position, infront+side, captured_id, newboard)
                         push!(moves, move)
                     end 
 
@@ -521,7 +535,7 @@ function available_moves_king(piece_id, game_state::GameState)
             exposedking = is_king_exposed(newboard, piece_id, captured_id, game_state)
 
             if !exposedking
-                move = SimpleMove(piece_id, piece, current_position, square, captured_id)
+                move = SimpleMove(piece_id, piece, current_position, square, captured_id, newboard)
                 push!(moves, move)
             end
         end
@@ -535,12 +549,15 @@ function available_moves_king(piece_id, game_state::GameState)
             kingside_path = [CartesianIndex(6,1),CartesianIndex(7,1)]
             queenside_rook_id = 1
             queenside_path = [CartesianIndex(4,1),CartesianIndex(3,1),CartesianIndex(2,1)]
+            rank = 1
         else
             kingside_rook_id = 32
             kingside_path = [CartesianIndex(6,8),CartesianIndex(7,8)]
             queenside_rook_id = 25
             queenside_path = [CartesianIndex(4,8),CartesianIndex(3,8),CartesianIndex(2,8)]
+            rank = 8
         end
+        king_from_row = 5
 
         #kingside castle 
         if game_state.pieces_move_count[kingside_rook_id]==0 #if kingside rook has not moved
@@ -559,7 +576,17 @@ function available_moves_king(piece_id, game_state::GameState)
             end
 
             if free_path
-                move = Castle(piece_id, kingside_rook_id, piece.color, kingside)
+                king_to_row = 7
+                rook_from_row = 8
+                rook_to_row =  6
+
+                newboard = copy(game_state.board)
+                newboard[king_from_row,rank] = 0
+                newboard[rook_from_row,rank] = 0
+                newboard[king_to_row,rank] = piece_id 
+                newboard[rook_to_row,rank] = kingside_rook_id
+
+                move = Castle(piece_id, kingside_rook_id, piece.color, kingside, newboard)
                 push!(moves, move)
             end
 
@@ -582,7 +609,17 @@ function available_moves_king(piece_id, game_state::GameState)
             end
 
             if free_path
-                move = Castle(piece_id, queenside_rook_id, piece.color, queenside)
+                king_to_row = 3
+                rook_from_row = 1
+                rook_to_row =  4
+
+                newboard = copy(game_state.board)
+                newboard[king_from_row,rank] = 0
+                newboard[rook_from_row,rank] = 0
+                newboard[king_to_row,rank] = piece_id 
+                newboard[rook_to_row,rank] = kingside_rook_id
+                
+                move = Castle(piece_id, queenside_rook_id, piece.color, queenside, newboard)
                 push!(moves, move)
             end
         end
@@ -632,7 +669,7 @@ function available_moves_other(piece_id, game_state::GameState)
         end
 
         if !exposedking && !incheck
-            newmove = SimpleMove(piece_id, piece, current_position, square, captured_id)
+            newmove = SimpleMove(piece_id, piece, current_position, square, captured_id, newboard)
             push!(moves, newmove)
         end
     end
@@ -693,17 +730,20 @@ function main()
     #test_board[4,2] = 25 #black queenside rook
     #test_board[8,1] = 32 #black kingside rook
 
-    test_board[5,2] = 28 #black queen
+    #test_board[5,2] = 28 #black queen
 
     #test_board[7,4] = 30 #black bishop
 
     #test_board[5,3] = 21 #black e pawn
-    test_board[4,3] = 20 #black d pawn
+    #test_board[4,3] = 20 #black d pawn
 
-    #last_move = SimpleMove(20,initial_game_state.pieces[20],CartesianIndex(4,7),CartesianIndex(4,5),0)
+    test_board[8,5] = 16 #white h pawn
+    test_board[7,5] = 23 #black g pawn
+
+    last_move = SimpleMove(29,initial_game_state.pieces[20],CartesianIndex(2,8),CartesianIndex(1,8),0, zeros(Int,8,8))
     #last_move = SimpleMove(22,initial_game_state.pieces[22],CartesianIndex(6,7),CartesianIndex(6,5),0)
     #last_move = SimpleMove(32,initial_game_state.pieces[32],CartesianIndex(8,8),CartesianIndex(5,8),0)
-    last_move = nothing
+    #last_move = SimpleMove(23,initial_game_state.pieces[23],CartesianIndex(7,7),CartesianIndex(7,5),0)
 
     turn = white
 
@@ -721,9 +761,8 @@ function main()
     game_state = GameState(test_board, initial_game_state.pieces, vision_graph, turn, turn_in_check, last_move, pieces_move_count)
     display(game_state)
 
-    moves = available_moves(5,game_state)
+    moves = available_moves(16,game_state)
     display(moves)
 
 end
-
 #main()
