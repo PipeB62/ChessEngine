@@ -1,0 +1,1 @@
+julia --project=. C:\Users\erick\OneDrive\Escritorio\Personal\CodingProjects\ChessEngine\Play.jl
