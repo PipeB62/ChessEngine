@@ -198,7 +198,7 @@ function play_with_UCI(sim_type, depth)
 
             # It is our turn
             elseif startswith(UI_message, "go")    
-                if sim_type == "Rand"     
+                if sim_type == "rand"     
                     allmoves = get_legal_moves(game_state)
 
                     # Decide our move

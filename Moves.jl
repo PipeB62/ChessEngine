@@ -1,5 +1,7 @@
 include("BoardAndPieces.jl")
 
+# Pseudo-legal move = Move that follows the ruled of the pieces and stays in the board but may allow a discovered check. Except castle
+
 global const UP = 10
 global const DOWN = -10
 global const RIGHT = 1
@@ -237,7 +239,11 @@ function make_move!(game_state::GameState, move::SimpleMove)
     end
 
     #check if move is legal
-    exposed_king = is_in_check(color, game_state)
+    if first(game_state.check_stack) || move.piece_id == get_king_id(color)
+        exposed_king = is_in_check(color, game_state)
+    else
+        exposed_king = discovered_attack(opposite_color, game_state)
+    end
 
     if exposed_king #undomove
         #Undo piece board
@@ -334,7 +340,11 @@ function make_move!(game_state::GameState, move::Promotion)
     end
 
     #check if move is legal
-    exposed_king = is_in_check(color, game_state)
+    if first(game_state.check_stack) || move.piece_id == get_king_id(color)
+        exposed_king = is_in_check(color, game_state)
+    else
+        exposed_king = discovered_attack(opposite_color, game_state)
+    end
     if exposed_king #undomove
         #Undo piece board
         game_state.pieces[move.from] = pawn
@@ -393,7 +403,12 @@ function make_move!(game_state::GameState, move::EnPassant)
     game_state.piece_list[move.captured_piece_id] = 0
 
     #check if move is legal
-    exposed_king = is_in_check(color, game_state) 
+    if first(game_state.check_stack) || move.piece_id == get_king_id(color)
+        exposed_king = is_in_check(color, game_state)
+    else
+        exposed_king = discovered_attack(opposite_color, game_state)
+    end
+
     if exposed_king #undomove
         #Undo piece board
         game_state.pieces[move.from] = pawn
