@@ -1,4 +1,5 @@
 include("Moves.jl")
+include("BoardAndPieces.jl")
 using Profile
 
 global const PIECE_VALUES = Dict(pawn=>1, bishop=>3, knight=>3, rook=>5, queen=>9, king=>200)
@@ -28,15 +29,21 @@ function piece_balance(game_state::GameState)
 end
 
 function development(game_state::GameState)
-    if game_state.turn == white
-        minor_pieces_ids = 1:8
-    else
-        minor_pieces_ids = 25:32
-    end
+        
+    white_pieces_ids = [2,3,6,7] #bishops and knights
+    black_pieces_ids = [26,27,30,31]
+
     penalty = 0.0
-    for id in minor_pieces_ids
+
+    for id in white_pieces_ids
         if game_state.piece_move_count[id]==0
             penalty -= 0.5
+        end
+    end
+
+    for id in black_pieces_ids
+        if game_state.piece_move_count[id]==0
+            penalty += 0.5
         end
     end
 
@@ -50,7 +57,7 @@ function eval_function(game_state::GameState)
         mult = -1
     end
 
-    f = mult*piece_balance(game_state) + development(game_state)
+    f = mult*(piece_balance(game_state) + development(game_state))
 
     return f
 end
@@ -134,13 +141,13 @@ function negamax(game_state::GameState, depth)
 end
 
 function negamax2(game_state::GameState, depth)
-    move_list = get_legal_moves(game_state)
-    best_score = -INFTY
-    best_move = nothing
-
     if depth==0
         return nothing, eval_function(game_state)
     end
+
+    move_list = get_legal_moves(game_state)
+    best_score = -INFTY
+    best_move = nothing
 
     if length(move_list)==0 #No available moves: stalemate or checkmate
         #Evaluate position

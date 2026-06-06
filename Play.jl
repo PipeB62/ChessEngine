@@ -20,28 +20,16 @@ function move_to_UCI(move)
 
     # Simple moves 
     if typeof(move) == SimpleMove || typeof(move) == EnPassant
-        move_str = "$(cartesian_to_chess(move.from))$(cartesian_to_chess(move.to))"
+        move_str = "$(square_to_chess(move.from))$(square_to_chess(move.to))"
 
     # Castling move
     elseif typeof(move) == Castle
-        if move.color == white
-            if move.side == queenside # Queenside castle
-                move_str = "e1c1"
-            else              # Kingside castle
-                move_str = "e1g1"
-            end
-        else
-            if move.side == queenside # Queenside castle
-                move_str = "e8c8"
-            else              # Kingside castle
-                move_str = "e8g8"
-            end
-        end
+        move_str = "$(square_to_chess(move.king_from))$(square_to_chess(move.king_to))"
 
     # Promotion move
     elseif typeof(move) == Promotion 
         letterDictionary = "xrnbqx"
-        move_str = "$(cartesian_to_chess(move.from))$(cartesian_to_chess(move.to))$(letterDictionary[Int(move.promotes_to)])"
+        move_str = "$(square_to_chess(move.from))$(square_to_chess(move.to))$(letterDictionary[Int(move.promotes_to)])"
     end
 
     return move_str
@@ -56,49 +44,27 @@ function UCI_to_move(UCI_move, game_state)
     UCI_to   = UCI_move[3:4]  
 
     # Get all legal moves
-    allmoves = get_all_moves(game_state)
+    allmoves = get_legal_moves(game_state)
 
     # Find matching move
     matched_move = nothing
     for move in allmoves
-
         if typeof(move) == SimpleMove || typeof(move) == EnPassant
-            if cartesian_to_chess(move.from) == UCI_from && cartesian_to_chess(move.to) == UCI_to
+            if square_to_chess(move.from) == UCI_from && square_to_chess(move.to) == UCI_to
                 matched_move = move
                 break
             end
 
         elseif typeof(move) == Castle
-            if move.color == white
-                if move.side == queenside # Queenside castle
-                    if "e1" == UCI_from && "c1" == UCI_to
-                        matched_move = move
-                        break
-                    end
-                else              # Kingside castle
-                    if "e1" == UCI_from && "g1" == UCI_to
-                        matched_move = move
-                        break
-                    end
-                end
-            else
-                if move.side == queenside # Queenside castle
-                    if "e8" == UCI_from && "c8" == UCI_to
-                        matched_move = move
-                        break
-                    end
-                else              # Kingside castle
-                    if "e8" == UCI_from && "g8" == UCI_to
-                        matched_move = move
-                        break
-                    end
-                end
+            if square_to_chess(move.king_from) == UCI_from && square_to_chess(move.king_to) == UCI_to
+                matched_move = move
+                break
             end
 
 
         elseif typeof(move) == Promotion
             letterDictionary = "xrnbqx"
-            if cartesian_to_chess(move.from) == UCI_from && cartesian_to_chess(move.to) == UCI_to && letterDictionary[Int(move.promotes_to)] == UCI_move[5] 
+            if square_to_chess(move.from) == UCI_from && square_to_chess(move.to) == UCI_to && letterDictionary[Int(move.promotes_to)] == UCI_move[5] 
                 matched_move = move
                 break
             end
@@ -185,7 +151,7 @@ function cvc()
 
 end
 
-function play_with_UCI()
+function play_with_UCI(sim_type, depth)
 
     """Minimal function to play with CuteChess using UCI protocol"""
 
@@ -207,14 +173,17 @@ function play_with_UCI()
             UI_message = readline()
             log("received: $UI_message")
 
-            if UI_message == "isready"                  # UI asking if engine is alive
+            # UI asking if engine is alive
+            if UI_message == "isready"                  
                 println("readyok")
                 flush(stdout)
 
-            elseif UI_message == "ucinewgame"           # Create new game
+            # Create new game
+            elseif UI_message == "ucinewgame"          
                 game_state = initalize_board()
 
-            elseif startswith(UI_message, "position")   # Current position after their move
+            # Current position after their move
+            elseif startswith(UI_message, "position")   
                 UI_message_parts = split(UI_message)
                 last_move = UI_message_parts[end]  
 
@@ -227,12 +196,17 @@ function play_with_UCI()
                 log("Interpreted move as: $move")
                 make_move!(game_state,move)
 
-            elseif startswith(UI_message, "go")         # It is our turn
-                allmoves = get_all_moves(game_state)
+            # It is our turn
+            elseif startswith(UI_message, "go")    
+                if sim_type == "Rand"     
+                    allmoves = get_legal_moves(game_state)
 
-                # Decide our move
-                moveindex = rand(1:length(allmoves)) 
-                move = allmoves[moveindex]
+                    # Decide our move
+                    moveindex = rand(1:length(allmoves)) 
+                    move = allmoves[moveindex]
+                elseif sim_type == "negamax"
+                    move, score = negamax2(game_state, depth)
+                end
 
                 # Make our move for us and communicate to UI
                 make_move!(game_state,move)
@@ -241,7 +215,8 @@ function play_with_UCI()
                 flush(stdout)
                 log("sent: bestmove $UCI_move")
 
-            elseif UI_message == "quit"                 # Connection stopped
+            # Connection stopped
+            elseif UI_message == "quit"                 
                 break
             end
 
@@ -257,7 +232,7 @@ function main()
     # cvc()
     # pvc()
 
-    play_with_UCI()
+    play_with_UCI("negamax", 5)
 end
 
 main()

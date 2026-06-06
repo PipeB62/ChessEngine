@@ -41,11 +41,11 @@ mutable struct GameState
     move_stack::Stack{AbstractMove}
 end
 
-function get_file(square::Int)
+function get_file(square::Int) # abc
     return square % 8 > 0 ? square % 8 : 8 
 end
 
-function get_rank(square::Int)
+function get_rank(square::Int) # 123
     return ceil(Int, square/8)
 end
 

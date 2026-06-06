@@ -117,9 +117,9 @@ function is_under_attack(square::Int, attacked_by_color::Color, game_state::Game
         inside = true
         while inside
             newsquare = mailbox[mailbox_index+v]
-            if newsquare>0 #check if it is inside the board
+            if newsquare>0 # check if it is inside the board
                 piece = game_state.pieces[newsquare]
-                if piece==no_piece #empty square
+                if piece==no_piece # empty square
                     v += d
                     continue
                 elseif (piece==rook || piece==queen) && game_state.colors[newsquare]==attacked_by_color
@@ -157,6 +157,58 @@ function is_under_attack(square::Int, attacked_by_color::Color, game_state::Game
     return false
 end
 
+function discovered_attack(attacked_by_color::Color, game_state::GameState)
+    king_id = get_king_id(get_opposite_color(attacked_by_color))
+    square = game_state.piece_list[king_id]
+
+    mailbox_index = mailbox64[square]
+        
+    #check long range attacks
+    for d in ROOK_DIRECTIONS
+        v = d
+        inside = true
+        while inside
+            newsquare = mailbox[mailbox_index+v]
+            if newsquare>0 # check if it is inside the board
+                piece = game_state.pieces[newsquare]
+                if piece==no_piece # empty square
+                    v += d
+                    continue
+                elseif (piece==rook || piece==queen) && game_state.colors[newsquare]==attacked_by_color
+                    return true
+                else
+                    break
+                end
+            else
+                inside = false
+            end
+        end
+    end
+
+    for d in BISHOP_DIRECTIONS
+        v = d
+        inside = true
+        while inside
+            newsquare = mailbox[mailbox_index+v]
+            if newsquare>0 #check if it is inside the board
+                piece = game_state.pieces[newsquare]
+                if piece==no_piece #empty square
+                    v += d
+                    continue
+                elseif (piece==bishop || piece==queen) && game_state.colors[newsquare]==attacked_by_color
+                    return true
+                else
+                    break
+                end
+            else
+                inside = false
+            end
+        end
+    end
+
+    return false
+end 
+
 function is_in_check(color::Color, game_state::GameState)
 
     king_id = get_king_id(color)
@@ -186,6 +238,7 @@ function make_move!(game_state::GameState, move::SimpleMove)
 
     #check if move is legal
     exposed_king = is_in_check(color, game_state)
+
     if exposed_king #undomove
         #Undo piece board
         game_state.pieces[move.from] = move.piece
