@@ -62,16 +62,33 @@ function eval_function(game_state::GameState)
     return f
 end
 
-function negamax2(game_state::GameState, depth)
+function negamax2(game_state::GameState, depth::Int)
     if depth==0
         return nothing, eval_function(game_state)
     end
 
-    move_list = get_legal_moves(game_state)
+    move_list = get_all_moves(game_state) #pseudo-legal moves
     best_score = -INFTY
     best_move = nothing
 
-    if length(move_list)==0 #No available moves: stalemate or checkmate
+    illegal_moves_count = 0
+    for move in move_list
+        islegal = make_move!(game_state, move) 
+        if islegal
+            opp_move, opp_score = negamax2(game_state, depth-1)
+            unmake_move!(game_state)
+            our_score = -opp_score
+
+            if our_score > best_score
+                best_score = our_score 
+                best_move = move
+            end
+        else
+            illegal_moves_count += 1
+        end
+    end
+
+    if length(move_list)==illegal_moves_count #No available moves: stalemate or checkmate
         #Evaluate position
         if first(game_state.check_stack)
             #checkmate
@@ -81,18 +98,6 @@ function negamax2(game_state::GameState, depth)
             eval = 0
         end
         return nothing, eval
-    end
-
-    for move in move_list
-        make_move!(game_state, move)
-        opp_move, opp_score = negamax2(game_state, depth-1)
-        unmake_move!(game_state)
-        our_score = -opp_score
-
-        if our_score > best_score
-            best_score = our_score 
-            best_move = move
-        end
     end
 
     return best_move, best_score
