@@ -162,7 +162,7 @@ function play_with_UCI(sim_type, depth)
     UI_message = readline()
     if UI_message == "uci"
         println("id name $engineName")
-        println("id author FelipeLaRiataBenavides")
+        println("id author FelipeLaRiataBenavides") #jajajaj
         println("uciok")
         flush(stdout) 
     end

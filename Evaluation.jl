@@ -1,5 +1,5 @@
 include("Moves.jl")
-include("BoardAndPieces.jl")
+#include("BoardAndPieces.jl")
 using Profile
 
 global const PIECE_VALUES = Dict(pawn=>1, bishop=>3, knight=>3, rook=>5, queen=>9, king=>200)
@@ -16,7 +16,7 @@ function piece_value(piece::Piece, color::Color)
     return mult*PIECE_VALUES[piece]
 end
 
-function piece_balance(game_state::GameState)
+function piece_balance(game_state::GameState) #Positive => white has more pieces
     balance = 0
     for piece_id in 1:32
         square = game_state.piece_list[piece_id]
@@ -60,14 +60,6 @@ function eval_function(game_state::GameState)
     f = mult*(piece_balance(game_state) + development(game_state))
 
     return f
-end
-
-mutable struct GameNode
-    game_state::GameState
-    move_queue::Vector{AbstractMove}
-    depth::Int
-    score::Int
-    best_move::Union{AbstractMove, Nothing}
 end
 
 function negamax2(game_state::GameState, depth)

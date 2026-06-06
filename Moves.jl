@@ -2,20 +2,21 @@ include("BoardAndPieces.jl")
 
 # Pseudo-legal move = Move that follows the ruled of the pieces and stays in the board but may allow a discovered check. Except castle
 
+#Directions for move generation in mailbox 
 global const UP = 10
 global const DOWN = -10
 global const RIGHT = 1
 global const LEFT = -1
 global const ALL_DIRECTIONS = [UP, UP+RIGHT, RIGHT, DOWN+RIGHT, DOWN, DOWN+LEFT, LEFT, UP+LEFT]
 global const KNIGHT_JUMPS = [UP+UP+RIGHT, UP+UP+LEFT, 
-                                  RIGHT+RIGHT+UP, RIGHT+RIGHT+DOWN,
-                                  LEFT+LEFT+UP, LEFT+LEFT+DOWN,
-                                  DOWN+DOWN+RIGHT, DOWN+DOWN+LEFT]
+                             RIGHT+RIGHT+UP, RIGHT+RIGHT+DOWN,
+                             LEFT+LEFT+UP, LEFT+LEFT+DOWN,
+                             DOWN+DOWN+RIGHT, DOWN+DOWN+LEFT]
 global const ROOK_DIRECTIONS = [UP, DOWN, RIGHT, LEFT]
 global const BISHOP_DIRECTIONS = [UP+RIGHT, DOWN+RIGHT, UP+LEFT, DOWN+LEFT]
 
-struct SimpleMove <: AbstractMove
-    piece_id::Int
+struct SimpleMove <: AbstractMove #Everything except castling, enpassant and promotions
+    piece_id::Int  
     piece::Piece
     from::Int
     to::Int
@@ -23,7 +24,10 @@ struct SimpleMove <: AbstractMove
     captured_piece::Piece
 end
 
-function Base.show(io::IO, move::SimpleMove)
+function Base.show(io::IO, move::SimpleMove) 
+    """
+    Printing simple moves using julia's print function
+    """
     from_text = square_to_chess(move.from)
     to_text = square_to_chess(move.to)
     if move.captured_piece_id == 0
@@ -45,6 +49,9 @@ struct Castle <: AbstractMove
 end
 
 function Base.show(io::IO, move::Castle)
+    """
+    Printing castle moves using julia's print function
+    """
     print(io, "Castle ", move.side)
 end 
 
@@ -58,6 +65,9 @@ struct Promotion <: AbstractMove
 end
 
 function Base.show(io::IO, move::Promotion)
+    """
+    Printing promotions using julia's print function
+    """
     from_text = square_to_chess(move.from)
     to_text = square_to_chess(move.to)
     if move.captured_piece_id == 0
@@ -76,7 +86,9 @@ struct EnPassant <: AbstractMove
 end
 
 function Base.show(io::IO, move::EnPassant)
-    
+    """
+    Printing en-passant using julia's print function
+    """
     from_text = square_to_chess(move.from)
     to_text = square_to_chess(move.to)
     capture_text = square_to_chess(move.captured_square)
@@ -84,6 +96,10 @@ function Base.show(io::IO, move::EnPassant)
 end 
 
 function is_under_attack(square::Int, attacked_by_color::Color, game_state::GameState)
+    """
+    Returns true if square is under attack by a piece of color "attacked_by_color" in the board of the given game_state
+    Checks for all possible attacks
+    """
 
     mailbox_index = mailbox64[square]
     color = get_opposite_color(attacked_by_color)
@@ -160,6 +176,11 @@ function is_under_attack(square::Int, attacked_by_color::Color, game_state::Game
 end
 
 function discovered_attack(attacked_by_color::Color, game_state::GameState)
+    """
+    Returns true if king is under attack by a piece of color "attacked_by_color" in the board of the given game_state, but
+    only checks for attacks from slider pieces (queen, rook, bishop). Used to determine if the king is exposed by a discovered attack
+    after a pseudo legal move in make_move!
+    """
     king_id = get_king_id(get_opposite_color(attacked_by_color))
     square = game_state.piece_list[king_id]
 
@@ -176,12 +197,12 @@ function discovered_attack(attacked_by_color::Color, game_state::GameState)
                 if piece==no_piece # empty square
                     v += d
                     continue
-                elseif (piece==rook || piece==queen) && game_state.colors[newsquare]==attacked_by_color
+                elseif (piece==rook || piece==queen) && game_state.colors[newsquare]==attacked_by_color #It is attacked by opponent slider.
                     return true
-                else
+                else #It encounters a same color piece or non-attacking opponent piece
                     break
                 end
-            else
+            else #It reaches the end of the board
                 inside = false
             end
         end
@@ -195,15 +216,15 @@ function discovered_attack(attacked_by_color::Color, game_state::GameState)
             if newsquare>0 #check if it is inside the board
                 piece = game_state.pieces[newsquare]
                 if piece==no_piece #empty square
-                    v += d
+                    v += d #Move one more square in direction d
                     continue
-                elseif (piece==bishop || piece==queen) && game_state.colors[newsquare]==attacked_by_color
+                elseif (piece==bishop || piece==queen) && game_state.colors[newsquare]==attacked_by_color #It is attacked by opponent slider.
                     return true
-                else
+                else #It encounters a same color piece or non-attacking opponent piece
                     break
                 end
-            else
-                inside = false
+            else #It reaches the end of the board
+                inside = false 
             end
         end
     end
@@ -212,13 +233,22 @@ function discovered_attack(attacked_by_color::Color, game_state::GameState)
 end 
 
 function is_in_check(color::Color, game_state::GameState)
+    """
+    Returns true if the king of color "color" is under attack in the given game_state
+    """
 
     king_id = get_king_id(color)
-    king_square = game_state.piece_list[king_id]
+    king_square = game_state.piece_list[king_id] #Get current position of the king
     
-    return is_under_attack(king_square, get_opposite_color(color), game_state)
+    return is_under_attack(king_square, get_opposite_color(color), game_state) #check if the king's square is under attack
 end
 
+"""
+Following are all the make_move! functions for the different move types. 
+Takes as input the game_state and a pseudo-legal move. 
+If the pseudo-legal move is illegal, it will not change the game_state and return false.
+If the pseudo-legal move is legal, it will apply the changes and return true
+"""
 function make_move!(game_state::GameState, move::SimpleMove)
 
     color = game_state.turn
@@ -443,6 +473,13 @@ function make_move!(game_state::GameState, move::EnPassant)
 
 end
 
+"""
+Following are the undo_board! functions.
+They take as input the current game_state and the last move. 
+They undo: piece_board, color_board, piece_list, and piece_move count.
+Only to be used inside the unmake_move! function
+"""
+
 function undo_board!(game_state::GameState, move::SimpleMove)
 
     color = get_opposite_color(game_state.turn)
@@ -546,7 +583,7 @@ function unmake_move!(game_state::GameState)
     #Remove last move from stack
     last_move = pop!(game_state.move_stack)
 
-    #Update board and counter
+    #Undo board and counter
     undo_board!(game_state, last_move)
 
     #Update turn 
@@ -559,6 +596,11 @@ function unmake_move!(game_state::GameState)
     return game_state
 
 end
+
+"""
+available_moves_x functions to be used only inside the get_all moves function for consistency. 
+They generate available pseudo-legal moves for piece of type x
+"""
 
 function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState) #pseudo legal moves
 
@@ -658,7 +700,7 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
 end
 
 function available_moves_king(piece_id::Int, square::Int, game_state::GameState) #pseudo legal moves
-    
+    "Get pseudo-legal moves available to the king. "
     mailbox_index = mailbox64[square]
     opposite_color = get_opposite_color(game_state.turn)
 
@@ -783,17 +825,17 @@ function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_s
         v = d
         inside = true
         while inside
-            newsquare = mailbox[mailbox_index + v]
+            newsquare = mailbox[mailbox_index + v] #Move one square in direction d
 
             if newsquare>0 #check if it is inside the board
-                seen_piece = game_state.pieces[newsquare]
+                seen_piece = game_state.pieces[newsquare] #get piece currently sitting in new square
 
-                if seen_piece==no_piece #empty square
+                if seen_piece==no_piece #empty square. possible quiet move
                     move = SimpleMove(piece_id, piece, square, newsquare, 0, no_piece)
                     push!(moves, move)
                     v += d
 
-                elseif game_state.colors[newsquare]==opposite_color
+                elseif game_state.colors[newsquare]==opposite_color #Opposite color piece, possible capture
                     captured_id = findfirst(x->x==newsquare, game_state.piece_list)
                     move = SimpleMove(piece_id, piece, square, newsquare, captured_id, seen_piece)
                     push!(moves, move)
@@ -804,7 +846,7 @@ function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_s
 
                 end
 
-            else
+            else #reached end of the board
                 inside = false
             end
         end
@@ -814,6 +856,9 @@ function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_s
 end
 
 function get_all_moves(game_state::GameState)
+    """
+    Returns list of all available pseudo-legal moves in the position
+    """
     allmoves = AbstractMove[]
     if game_state.turn == white
         turn_ids = 1:16
@@ -843,6 +888,9 @@ function get_all_moves(game_state::GameState)
 end
 
 function is_legal(game_state::GameState, move::AbstractMove)
+    """
+    Returns true if pseudo-legal move "move" is legal. game_state remains unchanged
+    """
     islegal = make_move!(game_state, move)
     if islegal 
         unmake_move!(game_state)
@@ -853,6 +901,9 @@ function is_legal(game_state::GameState, move::AbstractMove)
 end
 
 function get_legal_moves(game_state::GameState)
+    """
+    Generates a list of all legal moves available in the position.
+    """
     moves = get_all_moves(game_state)
     moves = filter!(m->is_legal(game_state,m), moves)
     return moves

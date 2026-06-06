@@ -35,14 +35,16 @@ mutable struct GameState
     pieces::Vector{Piece} #64 elements
     colors::Vector{Color} #64 elements
     piece_list::Vector{Int} #32 elements. One for each piece. has position of each piece
-    piece_move_count::Vector{Int} #32 elements
-    turn::Color
+    piece_move_count::Vector{Int} #32 elements. Number of times each piece has moved. index is piece_id
+    turn::Color #Current turn
     check_stack::Stack{Bool}
     move_stack::Stack{AbstractMove}
 end
+#Extract check or last_move using first(check_stack) or first(move_stack)
+#Using a stack for unmake move
 
 function get_file(square::Int) # abc
-    return square % 8 > 0 ? square % 8 : 8 
+    return square % 8 > 0 ? square % 8 : 8
 end
 
 function get_rank(square::Int) # 123
@@ -51,7 +53,9 @@ end
 
 global const FILE_LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h"]
 function square_to_chess(square::Int) #For display 
-
+    """
+    Takes input a square (int between 1 and 64) and returns a string in chess notation (eg e4)
+    """
     file_num = get_file(square)
     file = FILE_LETTERS[file_num]
     rank = string(get_rank(square))
@@ -115,6 +119,9 @@ function get_king_id(color::Color)
 end
 
 function initalize_board()
+    """
+    Return game_state in initial position
+    """
     
     pieces = fill(no_piece,64)
     pieces[1:8] .= [rook, knight, bishop, queen, king, bishop, knight, rook]
