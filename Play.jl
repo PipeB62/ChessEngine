@@ -6,6 +6,8 @@ global const ENGINE_NAME = "Chessinator 3000"
 
 const LOG = open("debug.txt", "w")
 
+# Optimizations: Using FEN can be optimized if we loosen the of certain pieces having certain id's  
+
 function log(msg)
 
     """Create a log in the LOG file for debugging"""
@@ -22,8 +24,6 @@ function parse_position(position_msg::String)
     This obtains the current position by starting from starpos or fen_str and doing all the moves described
     by the position_msg. This approach, where we create a new board each time, allows us to start from any 
     arbitrary position, go back and analyze a position as well as play fisher chess in the future. 
-
-    TODO: check if this kills efficiency
     """
 
     parts = split(position_msg)
@@ -34,8 +34,6 @@ function parse_position(position_msg::String)
         idx = 3  # After "position startpos" we would have "moves" or nothing
     
     elseif parts[2] == "fen"
-        throw(ErrorException("FEN not yet implemented"))
-
         # Parse the position message to work out the initial position
         moves_idx = findfirst(==("moves"), parts)
         fen_end = isnothing(moves_idx) ? length(parts) : moves_idx - 1
@@ -53,7 +51,7 @@ function parse_position(position_msg::String)
     # Replay all moves listed after "moves"
     if idx <= length(parts) && parts[idx] == "moves"
         for i in (idx + 1):length(parts)
-            move = UCI_to_move_create(parts[i], game_state)
+            move = UCI_to_move(parts[i], game_state)
             make_move!(game_state, move)
         end
     end
@@ -85,51 +83,7 @@ function move_to_UCI(move)
     return move_str
 end
 
-
-function UCI_to_move_search(UCI_move, game_state)
-
-    """Translate a move from UCI protocol to our native language by looking through all moves"""
-
-    # Parse incoming move
-    UCI_from = UCI_move[1:2]  
-    UCI_to   = UCI_move[3:4]  
-
-    # Get all legal moves
-    allmoves = get_legal_moves(game_state)
-
-    # Find matching move
-    matched_move = nothing
-    for move in allmoves
-        if typeof(move) == SimpleMove || typeof(move) == EnPassant
-            if square_to_chess(move.from) == UCI_from && square_to_chess(move.to) == UCI_to
-                matched_move = move
-                break
-            end
-
-        elseif typeof(move) == Castle
-            if square_to_chess(move.king_from) == UCI_from && square_to_chess(move.king_to) == UCI_to
-                matched_move = move
-                break
-            end
-
-        elseif typeof(move) == Promotion
-            if square_to_chess(move.from) == UCI_from && square_to_chess(move.to) == UCI_to && get_letter_from_piece(move.promotes_to) == "$(UCI_move[5])"
-                matched_move = move
-                break
-            end
-
-        end
-    end
-
-    if isnothing(matched_move)
-        throw(ErrorException("Not found move: $UCI_move"))
-    end
-
-    return matched_move
-end
-
-
-function UCI_to_move_create(UCI_move, game_state)
+function UCI_to_move(UCI_move, game_state)
 
     """Translate a move from UCI protocol to our native language by constructing the move"""
 
@@ -149,7 +103,7 @@ function UCI_to_move_create(UCI_move, game_state)
         promotes_to = get_piece_from_letter("$(UCI_move[5])")
         matched_move = Promotion(moving_piece_id, square_from, square_to, captured_piece_id, captured_piece, promotes_to)
 
-    # EnPassant (Checks if it is a pawn move that does not directly captured a piece and is diagonal)
+    # EnPassant (Checks if it is a pawn move that does not directly capture a piece and is diagonal)
     elseif moving_piece == pawn && captured_piece == no_piece && is_diagonal(square_from, square_to)
         # Offset because we don't capture where we go but one rank up/down depending on what color we are
         offset = game_state.turn == white ? 8 : -8
@@ -334,7 +288,7 @@ function main()
     # cvc()
     # pvc()
 
-    play_with_UCI("negamax", 5)
+    play_with_UCI("negamax", 4)
 end
 
 main()

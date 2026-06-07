@@ -185,14 +185,16 @@ end
 
 
 function board_from_fen(fen_str::String)
-    
-    """
-    Return game_state starting from position described by fen_str.
 
-    FUNCTION NOT FINISHED AND THUS NOT YET USED
+    """
+    Return game_state starting from position described by fen_str. 
+
+    Currently using "stubborn id's", meaning 1:16 id's are white, 17:32 are black
+    and 5 and 29 are white and black king respectively. This induces inneficiencies in the 
+    code. Whenever this is generalized updating this functions should give a speedup
     """
 
-    # FEN description is comprised as follows: piece placement, side to move, castling ability, en passant target square, halfmove, fullmove
+    # Parse FEN description comprised as follows: piece placement, side to move, castling ability, en passant target square, halfmove, fullmove
     parts = split(fen_str)
     placement = parts[1]
     side_to_move = parts[2]
@@ -208,64 +210,117 @@ function board_from_fen(fen_str::String)
     )
 
     # Fen starts at rank 8 (with black pieces) and on file 0 (so at a)
-    fen_rank = 8  
-    fen_file = 0  
+    fen_rank = 8 
+    fen_file = 0 
 
     for fen_char in placement
-        # New line 
-        if fen_char == '/' 
+        # Next line
+        if fen_char == '/'
             fen_rank -= 1
             fen_file = 0
-
+        
         # Empty squares
         elseif isdigit(fen_char)
             fen_file += parse(Int, fen_char)
 
-        # Piece
+        # Occupied square
         else
             square = (fen_rank - 1) * 8 + fen_file + 1
             pieces[square] = fen_char_to_piece[lowercase(fen_char)]
             colors[square] = isuppercase(fen_char) ? white : black
             fen_file += 1
-
         end
     end
 
+    # Building piece list by finding all pieces first, categorizing them into piece types
+    piece_list = zeros(Int, 32)
 
-    # TODO: MISSING PART THAT CREATES THE PIECE_LIST. FOR NOW WE DON'T HAVE FEN FUNCTIONALITY
+    # Collect squares per color and piece type
+    white_squares = Dict(p => Int[] for p in instances(Piece) if p != no_piece)
+    black_squares = Dict(p => Int[] for p in instances(Piece) if p != no_piece)
+    for sq in 1:64
+        if pieces[sq] != no_piece
+            if colors[sq] == white
+                push!(white_squares[pieces[sq]], sq)
+            else
+                push!(black_squares[pieces[sq]], sq)
+            end
+        end
+    end
 
-    # Initially no pieces have moved
+    # Kings MUST be IDs 5 and 29 
+    piece_list[5]  = only(white_squares[king]) 
+    piece_list[29] = only(black_squares[king])
+
+    # White ids MUST be 1:16 and black 17:32
+    back_rank_non_king = [rook, knight, bishop, queen, bishop, knight, rook] 
+    white_non_king_ids = [1, 2, 3, 4, 6, 7, 8]
+    black_non_king_ids = [25, 26, 27, 28, 30, 31, 32]
+
+    # Sort pieces 
+    for p in [rook, knight, bishop, queen] sort!(white_squares[p]) end
+    for p in [rook, knight, bishop, queen] sort!(black_squares[p]) end
+
+    # Assign white pieces depending on existence
+    for (id, piece_type) in zip(white_non_king_ids, back_rank_non_king)
+        piece_list[id] = isempty(white_squares[piece_type]) ? 0 : popfirst!(white_squares[piece_type])
+    end
+
+    # Assign black pieces depending on existence
+    for p in [rook, knight, bishop, queen] sort!(black_squares[p]) end
+    for (id, piece_type) in zip(black_non_king_ids, back_rank_non_king)
+        piece_list[id] = isempty(black_squares[piece_type]) ? 0 : popfirst!(black_squares[piece_type])
+    end
+
+    # Assign white pawns to IDs 9–16
+    sort!(white_squares[pawn])
+    for i in 1:8
+        piece_list[8 + i] = isempty(white_squares[pawn]) ? 0 : popfirst!(white_squares[pawn])
+    end
+
+    # Assign black pawns to IDs 17–24
+    sort!(black_squares[pawn])
+    for i in 1:8
+        piece_list[16 + i] = isempty(black_squares[pawn]) ? 0 : popfirst!(black_squares[pawn])
+    end
+
+    # UCI FEN strings indicate what castles are still possible. To include this in our positions we mark rooks 
+    # as having moved if they are no longer allowed to castle 
+    function revoke_if_missing(letter, square_str)
+        # If castling no longer possible
+        if !occursin(letter, castling)
+            # Find whatever piece is there
+            piece_pos = findfirst(==(chess_to_square(square_str)), piece_list)
+            # Add a movement to disable castling
+            if !isnothing(piece_pos)
+                piece_move_count[piece_pos] = 1
+            end
+        end
+    end
+
     piece_move_count = zeros(Int, 32)
-
-    # To turn off castling rights we add a 1 "moved_counter" to the rooks and/or kings depending on rights
-    if !occursin('Q', castling)  
-        piece_move_count[1] = 1   # a1 rook
-    end
-    if !occursin('K', castling)  
-        piece_move_count[8] = 1   # h1 rook
-    end
-    if !occursin('K', castling) && !occursin('Q', castling)
+    revoke_if_missing('Q', "a1")
+    revoke_if_missing('K', "h1")
+    if !occursin('Q', castling) && !occursin('K', castling)
         piece_move_count[5] = 1   # white king
     end
-    if !occursin('q', castling)  
-        piece_move_count[25] = 1  # a8 rook
-    end
-    if !occursin('k', castling) 
-        piece_move_count[32] = 1  # h8 rook
-    end
-    if !occursin('k', castling) && !occursin('q', castling)
+    revoke_if_missing('q', "a8")
+    revoke_if_missing('k', "h8")
+    if !occursin('q', castling) && !occursin('k', castling)
         piece_move_count[29] = 1  # black king
     end
 
     # Assign who's turn it is
     turn = side_to_move == "w" ? white : black
 
-    #Initialize check stack
-    check_stack = Stack{Bool}()
-    push!(check_stack, false)
-
-    #Initialize move stack
+    # Initialize a temporary game and look for check
     move_stack = Stack{AbstractMove}()
+    temp_state = GameState(pieces, colors, piece_list, piece_move_count, turn, Stack{Bool}(), move_stack)
+    in_check = is_in_check(turn, temp_state)
+
+    # Initialize real check stack
+    check_stack = Stack{Bool}()
+    push!(check_stack, in_check)
 
     return GameState(pieces, colors, piece_list, piece_move_count, turn, check_stack, move_stack)
 end
