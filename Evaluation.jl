@@ -62,7 +62,10 @@ function eval_function(game_state::GameState)
     return f
 end
 
-function negamax2(game_state::GameState, depth::Int)
+function negamax2(game_state::GameState, depth::Int, alpha::Real = -INFTY, beta::Real = INFTY)
+    """
+    negamax with alpha beta pruning.
+    """
     if depth==0
         return nothing, eval_function(game_state)
     end
@@ -75,14 +78,21 @@ function negamax2(game_state::GameState, depth::Int)
     for move in move_list
         islegal = make_move!(game_state, move) 
         if islegal
-            opp_move, opp_score = negamax2(game_state, depth-1)
+            opp_move, opp_score = negamax2(game_state, depth-1, -beta, -alpha)
             unmake_move!(game_state)
             our_score = -opp_score
+
+            alpha = max(alpha, our_score) # worse assured score
 
             if our_score > best_score
                 best_score = our_score 
                 best_move = move
             end
+
+            if alpha >= beta
+                break
+            end
+
         else
             illegal_moves_count += 1
         end
@@ -98,6 +108,11 @@ function negamax2(game_state::GameState, depth::Int)
             eval = 0
         end
         return nothing, eval
+    end
+
+    if isnothing(best_move) #Forced mate edge case?
+        ix = findfirst(x->is_legal(game_state, x), move_list)
+        best_move = move_list[ix]
     end
 
     return best_move, best_score
