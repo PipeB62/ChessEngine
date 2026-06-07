@@ -189,7 +189,7 @@ function cvc()
     display(game_state)
     println()
     
-    for i in 1:100
+    for i in 1:1000
         allmoves = get_all_moves(game_state)
         if length(allmoves)==0
             if game_state.check
@@ -201,9 +201,9 @@ function cvc()
         end
         
         print("Calculating... ")
-        move, score = negamax2(game_state, 4)
+        move, score = negamax2(game_state, 5)
         println("Done")
-        readline()
+        #readline()
         println("\033c")
         println(game_state.turn, " move: ", move, " score: ", score)
 

@@ -172,6 +172,16 @@ function is_under_attack(square::Int, attacked_by_color::Color, game_state::Game
         end
     end
 
+    #king attacks
+    for d in ALL_DIRECTIONS
+        newsquare = mailbox[mailbox_index+d]
+        if newsquare>0 #check if it is inside the board
+            if game_state.pieces[newsquare]==king && game_state.colors[newsquare]==attacked_by_color 
+                return true
+            end
+        end
+    end
+
     return false
 end
 
@@ -239,6 +249,13 @@ function is_in_check(color::Color, game_state::GameState)
 
     king_id = get_king_id(color)
     king_square = game_state.piece_list[king_id] #Get current position of the king
+
+    if king_square == 0
+        println("What")
+        display(game_state.move_stack)
+        display(game_state)
+        readline()
+    end
     
     return is_under_attack(king_square, get_opposite_color(color), game_state) #check if the king's square is under attack
 end
