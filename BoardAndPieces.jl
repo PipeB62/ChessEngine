@@ -4,6 +4,12 @@ using DataStructures
 @enum Piece no_piece=0 pawn=1 rook=2 knight=3 bishop=4 queen=5 king=6
 
 abstract type AbstractMove end
+global const FILE_LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h"]
+global const FILE_NUMBERS = Dict(
+        'a' => 1,   'b' => 2, 'c' => 3, 'd' => 4,
+        'e' => 5,   'f' => 6, 'g' => 7, 'h' => 8,
+    )
+
 
 global const mailbox = Int[
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -51,7 +57,6 @@ function get_rank(square::Int) # 123
     return ceil(Int, square/8)
 end
 
-global const FILE_LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h"]
 function square_to_chess(square::Int) #For display 
     """
     Takes input a square (int between 1 and 64) and returns a string in chess notation (eg e4)
@@ -63,13 +68,24 @@ function square_to_chess(square::Int) #For display
     return file*rank
 end
 
+function chess_to_square(chess_str)
+    """
+    Takes input a chess coordinate (eg e4) and returns a square (int between 1 and 64)
+    """
+    rank = parse(Int, string(chess_str[2]))
+    file = FILE_NUMBERS[chess_str[1]]
+
+    return 8 * (rank - 1) + file
+end
+
+
 function print_matrix_no_quotes(mat::AbstractMatrix{<:AbstractString}) #For display
     for row in eachrow(mat)
         println(join(row, "  "))
     end
 end
 
-function get_piece_letter(piece::Piece)
+function get_letter_from_piece(piece::Piece)::String
     if piece == pawn 
         return "p"
     elseif piece == rook 
@@ -85,12 +101,28 @@ function get_piece_letter(piece::Piece)
     end
 end
 
+function get_piece_from_letter(letter::String)
+    if letter == "p" 
+        return pawn
+    elseif letter == "r" 
+        return rook
+    elseif letter == "n" 
+        return knight
+    elseif letter == "b" 
+        return bishop
+    elseif letter == "q" 
+        return queen
+    elseif letter == "k"
+        return king
+    end
+end
+
 function Base.show(io::IO, game_state::GameState) #Display game state
     string_board = fill("x",(8,8))
     for sq in game_state.piece_list
         if sq>0
             piece = game_state.pieces[sq]
-            piece_letter = get_piece_letter(piece)
+            piece_letter = get_letter_from_piece(piece)
             if game_state.colors[sq]==black
                 piece_letter = uppercase(piece_letter)
             end
@@ -149,6 +181,93 @@ function initalize_board()
 
     return game_state
 
+end
+
+
+function board_from_fen(fen_str::String)
+    
+    """
+    Return game_state starting from position described by fen_str.
+
+    FUNCTION NOT FINISHED AND THUS NOT YET USED
+    """
+
+    # FEN description is comprised as follows: piece placement, side to move, castling ability, en passant target square, halfmove, fullmove
+    parts = split(fen_str)
+    placement = parts[1]
+    side_to_move = parts[2]
+    castling = length(parts) >= 3 ? parts[3] : "-"
+
+    # Initialize empty board
+    pieces = fill(no_piece, 64)
+    colors = fill(no_color, 64)
+
+    fen_char_to_piece = Dict(
+        'p' => pawn,   'n' => knight, 'b' => bishop,
+        'r' => rook,   'q' => queen,  'k' => king
+    )
+
+    # Fen starts at rank 8 (with black pieces) and on file 0 (so at a)
+    fen_rank = 8  
+    fen_file = 0  
+
+    for fen_char in placement
+        # New line 
+        if fen_char == '/' 
+            fen_rank -= 1
+            fen_file = 0
+
+        # Empty squares
+        elseif isdigit(fen_char)
+            fen_file += parse(Int, fen_char)
+
+        # Piece
+        else
+            square = (fen_rank - 1) * 8 + fen_file + 1
+            pieces[square] = fen_char_to_piece[lowercase(fen_char)]
+            colors[square] = isuppercase(fen_char) ? white : black
+            fen_file += 1
+
+        end
+    end
+
+
+    # TODO: MISSING PART THAT CREATES THE PIECE_LIST. FOR NOW WE DON'T HAVE FEN FUNCTIONALITY
+
+    # Initially no pieces have moved
+    piece_move_count = zeros(Int, 32)
+
+    # To turn off castling rights we add a 1 "moved_counter" to the rooks and/or kings depending on rights
+    if !occursin('Q', castling)  
+        piece_move_count[1] = 1   # a1 rook
+    end
+    if !occursin('K', castling)  
+        piece_move_count[8] = 1   # h1 rook
+    end
+    if !occursin('K', castling) && !occursin('Q', castling)
+        piece_move_count[5] = 1   # white king
+    end
+    if !occursin('q', castling)  
+        piece_move_count[25] = 1  # a8 rook
+    end
+    if !occursin('k', castling) 
+        piece_move_count[32] = 1  # h8 rook
+    end
+    if !occursin('k', castling) && !occursin('q', castling)
+        piece_move_count[29] = 1  # black king
+    end
+
+    # Assign who's turn it is
+    turn = side_to_move == "w" ? white : black
+
+    #Initialize check stack
+    check_stack = Stack{Bool}()
+    push!(check_stack, false)
+
+    #Initialize move stack
+    move_stack = Stack{AbstractMove}()
+
+    return GameState(pieces, colors, piece_list, piece_move_count, turn, check_stack, move_stack)
 end
 
 function main()

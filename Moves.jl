@@ -909,6 +909,30 @@ function get_legal_moves(game_state::GameState)
     return moves
 end
 
+function square_distance(square_a::Int, square_b::Int)
+    file_a = get_file(square_a)
+    rank_a = get_rank(square_a)
+
+    file_b = get_file(square_b)
+    rank_b = get_rank(square_b)
+
+    return max(abs(file_a - file_b), abs(rank_a - rank_b))
+end
+
+function is_diagonal(square_a::Int, square_b::Int)
+    file_a = get_file(square_a)
+    rank_a = get_rank(square_a)
+
+    file_b = get_file(square_b)
+    rank_b = get_rank(square_b)
+
+    if rank_a != rank_b && file_a != file_b
+        return true
+    else
+        return false
+    end
+end
+
 function main()
     game_state = initalize_board()
     display(game_state)
