@@ -640,7 +640,10 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
         enpassant_rank = 4
     end
 
-    moves = AbstractMove[]
+    #moves = AbstractMove[]
+    promotion_moves = AbstractMove[]
+    capture_moves = AbstractMove[] #including promotion+capture
+    quiet_moves = AbstractMove[] #no promotion, no captures
 
     #Advance move
     newsquare = mailbox[mailbox_index+infront]
@@ -649,11 +652,11 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
         if rank == promotion_rank #If the pawn is on the promotion rank, consider all possible promotions
             for promotes_to in promotions
                 move = Promotion(piece_id, square, newsquare, 0, no_piece, promotes_to)
-                push!(moves, move)
+                push!(promotion_moves, move)
             end
         else
             move = SimpleMove(piece_id, pawn, square, newsquare, 0, no_piece)
-            push!(moves, move)
+            push!(quiet_moves, move)
         end
 
     end
@@ -664,7 +667,7 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
     if rank == starting_rank && game_state.pieces[passing_square] == no_piece && game_state.pieces[newsquare] == no_piece
 
         move = SimpleMove(piece_id, pawn, square, newsquare, 0, no_piece)
-        push!(moves, move)
+        push!(quiet_moves, move)
     end
 
     #Captures. Consider capture+promotion
@@ -678,11 +681,11 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
                 if rank == promotion_rank #If the pawn is on the promotion rank, consider all possible promotions
                     for promotes_to in promotions
                         move = Promotion(piece_id, square, newsquare, seen_piece_id, seen_piece, promotes_to)
-                        push!(moves, move)
+                        push!(capture_moves, move)
                     end
                 else
                     move = SimpleMove(piece_id, pawn, square, newsquare, seen_piece_id, seen_piece)
-                    push!(moves, move)
+                    push!(capture_moves, move)
                 end
             end
         end 
@@ -705,7 +708,7 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
 
                     if game_state.pieces[newsquare] == no_piece #this should be unnecessary since last move checked it is empty
                         move = EnPassant(piece_id, square, newsquare, captured_square, captured_id)
-                        push!(moves, move)
+                        push!(capture_moves, move)
                     end
                 end
 
@@ -713,7 +716,7 @@ function available_moves_pawn(piece_id::Int, square::Int, game_state::GameState)
         end
     end
 
-    return moves
+    return promotion_moves, capture_moves, quiet_moves
 end
 
 function available_moves_king(piece_id::Int, square::Int, game_state::GameState) #pseudo legal moves
@@ -721,7 +724,9 @@ function available_moves_king(piece_id::Int, square::Int, game_state::GameState)
     mailbox_index = mailbox64[square]
     opposite_color = get_opposite_color(game_state.turn)
 
-    moves = AbstractMove[]
+    #moves = AbstractMove[]
+    capture_moves = AbstractMove[]
+    quiet_moves = AbstractMove[]
 
     #Normal moves
     for d in ALL_DIRECTIONS
@@ -732,12 +737,12 @@ function available_moves_king(piece_id::Int, square::Int, game_state::GameState)
 
             if seen_piece==no_piece
                 move = SimpleMove(piece_id, king, square, newsquare, 0, no_piece)
-                push!(moves, move)
+                push!(quiet_moves, move)
 
             elseif game_state.colors[newsquare]==opposite_color
                 captured_id = findfirst(x->x==newsquare, game_state.piece_list)
                 move = SimpleMove(piece_id, king, square, newsquare, captured_id, seen_piece)
-                push!(moves, move)
+                push!(capture_moves, move)
             end
         end
     end
@@ -770,7 +775,7 @@ function available_moves_king(piece_id::Int, square::Int, game_state::GameState)
 
             if free_path
                 move = Castle(piece_id, kingside_rook_id, square, kingside_path[end], game_state.piece_list[kingside_rook_id], kingside_path[1], kingside)
-                push!(moves, move)
+                push!(quiet_moves, move)
             end
 
         end
@@ -788,13 +793,13 @@ function available_moves_king(piece_id::Int, square::Int, game_state::GameState)
 
                 if free_path
                     move = Castle(piece_id, queenside_rook_id, square, queenside_path[end], game_state.piece_list[queenside_rook_id], queenside_path[1], queenside)
-                    push!(moves, move)
+                    push!(quiet_moves, move)
                 end
             end
         end
     end
 
-    return moves
+    return capture_moves, quiet_moves
 
 end
 
@@ -803,7 +808,9 @@ function available_moves_knight(piece_id::Int, square::Int, game_state::GameStat
     mailbox_index = mailbox64[square]
     opposite_color = get_opposite_color(game_state.turn)
 
-    moves = AbstractMove[]
+    #moves = AbstractMove[]
+    capture_moves = AbstractMove[]
+    quiet_moves = AbstractMove[]
 
     for d in KNIGHT_JUMPS
         newsquare = mailbox[mailbox_index+d]
@@ -811,16 +818,16 @@ function available_moves_knight(piece_id::Int, square::Int, game_state::GameStat
             seen_piece = game_state.pieces[newsquare]
             if seen_piece==no_piece
                 move = SimpleMove(piece_id, knight, square, newsquare, 0, no_piece)
-                push!(moves, move)
+                push!(quiet_moves, move)
             elseif game_state.colors[newsquare]==opposite_color
                 captured_id = findfirst(x->x==newsquare,game_state.piece_list)
                 move = SimpleMove(piece_id, knight, square, newsquare, captured_id, seen_piece)
-                push!(moves, move)
+                push!(capture_moves, move)
             end
         end
     end
 
-    return moves
+    return capture_moves, quiet_moves
 end
 
 function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_state::GameState)
@@ -836,7 +843,9 @@ function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_s
     mailbox_index = mailbox64[square]
     opposite_color = get_opposite_color(game_state.turn)
 
-    moves = AbstractMove[]
+    #moves = AbstractMove[]
+    capture_moves = AbstractMove[]
+    quiet_moves = AbstractMove[]
 
     for d in directions
         v = d
@@ -849,13 +858,13 @@ function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_s
 
                 if seen_piece==no_piece #empty square. possible quiet move
                     move = SimpleMove(piece_id, piece, square, newsquare, 0, no_piece)
-                    push!(moves, move)
+                    push!(quiet_moves, move)
                     v += d
 
                 elseif game_state.colors[newsquare]==opposite_color #Opposite color piece, possible capture
                     captured_id = findfirst(x->x==newsquare, game_state.piece_list)
                     move = SimpleMove(piece_id, piece, square, newsquare, captured_id, seen_piece)
-                    push!(moves, move)
+                    push!(capture_moves, move)
                     break
 
                 else #it encountered a same color piece
@@ -869,16 +878,19 @@ function available_moves_slider(piece_id::Int, piece::Piece, square::Int, game_s
         end
     end
 
-    return moves
+    return capture_moves, quiet_moves
 end
 
 function get_all_moves(game_state::GameState)
     """
     Returns list of all available pseudo-legal moves in the position
     """
-    allmoves = AbstractMove[]
+    all_promotions = []
+    all_captures = []
+    all_quiet = []
+    
     if game_state.turn == white
-        turn_ids = 1:16
+        turn_ids = 16:-1:1
     else
         turn_ids = 17:32
     end
@@ -889,19 +901,26 @@ function get_all_moves(game_state::GameState)
         if square > 0 #Piece is still on the board
             piece = game_state.pieces[square]
             if piece == pawn 
-                moves = available_moves_pawn(piece_id, square, game_state)
+                promotion_moves, capture_moves, quiet_moves = available_moves_pawn(piece_id, square, game_state)
+                append!(all_promotions, promotion_moves)
             elseif piece == king 
-                moves = available_moves_king(piece_id, square, game_state)
+                capture_moves, quiet_moves = available_moves_king(piece_id, square, game_state)
             elseif piece == knight
-                moves = available_moves_knight(piece_id, square, game_state)
+                capture_moves, quiet_moves = available_moves_knight(piece_id, square, game_state)
             else
-                moves = available_moves_slider(piece_id, piece, square, game_state)
+                capture_moves, quiet_moves = available_moves_slider(piece_id, piece, square, game_state)
             end
-            append!(allmoves, moves)
+            append!(all_captures, capture_moves)
+            append!(all_quiet, quiet_moves)
         end
     end
 
-    return allmoves
+    all_moves = AbstractMove[]
+    append!(all_moves, all_promotions)
+    append!(all_moves, all_captures)
+    append!(all_moves, all_quiet)
+
+    return all_moves
 end
 
 function is_legal(game_state::GameState, move::AbstractMove)
