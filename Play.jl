@@ -113,7 +113,8 @@ function UCI_to_move(UCI_move, game_state)
 
     # Castle (Checks if the king moved more than 1 position)
     elseif moving_piece == king && square_distance(square_from, square_to) > 1 
-        if UCI_move[3] == "c"
+        display(UCI_move[3])
+        if UCI_move[3] == 'c'
             side = queenside
             rook_from = chess_to_square("a$(UCI_move[2])")
             rook_to = chess_to_square("d$(UCI_move[2])")
@@ -153,30 +154,29 @@ function pvc()
     println()
     
     for i in 1:100
-        allmoves = get_legal_moves(game_state)
-        if length(allmoves)==0
-            if first(game_state.check_stack)
-                print("checkmate")
-            else
-                print("stalemate")
-            end
-            break
-        end
-        show_moves(allmoves)
         if game_state.turn == playercolor
+
+            allmoves = get_legal_moves(game_state)
+            if length(allmoves)==0
+                if first(game_state.check_stack)
+                    print("checkmate")
+                else
+                    print("stalemate")
+                end
+                break
+            end
+            show_moves(allmoves)
             
             println("Choose a move")
             moveindex = parse(Int, readline())
+            move = allmoves[moveindex]
         else
-            moveindex = rand(1:length(allmoves))  
-        end
-
-        move = allmoves[moveindex]
-        if game_state.turn == computercolor
+            move, score = negamax2(game_state, 5)
+            println("Computer move: ", move)
             readline()
             println("\033c")
-            println("Computer move: ", move)
         end
+
         make_move!(game_state,move)
         display(game_state)
     end
@@ -285,10 +285,10 @@ function play_with_UCI(engine_type, depth)
 end
 
 function main()
-    # cvc()
-    # pvc()
+    #cvc()
+    #pvc()
 
-    play_with_UCI("negamax", 4)
+    play_with_UCI("negamax", 5)
 end
 
 main()
